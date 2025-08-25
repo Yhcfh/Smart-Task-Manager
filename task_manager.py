@@ -1,4 +1,6 @@
 import datetime
+import json
+import os
 
 # ------------------------------
 # Task Class (OOP Fundamentals)
@@ -6,34 +8,66 @@ import datetime
 class Task:
     task_counter = 1  # static variable for unique IDs
 
-    def __init__(self, title, description, priority, due_date):
-        self.id = Task.task_counter
-        Task.task_counter += 1
+    def __init__(self, title, description, priority, due_date, status="Pending", task_id=None):
+        if task_id:
+            self.id = task_id
+        else:
+            self.id = Task.task_counter
+            Task.task_counter += 1
+
         self.title = title
         self.description = description
         self.priority = priority
         self.due_date = due_date
-        self.status = "Pending"
+        self.status = status
 
     def mark_complete(self):
         self.status = "Completed"
 
+    def to_dict(self):
+        """Convert task to dictionary for saving in JSON."""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "priority": self.priority,
+            "due_date": self.due_date.strftime("%Y-%m-%d"),
+            "status": self.status,
+        }
+
+    @staticmethod
+    def from_dict(data):
+        """Re-create a Task object from dictionary (when loading)."""
+        due_date_obj = datetime.datetime.strptime(data["due_date"], "%Y-%m-%d").date()
+        return Task(
+            data["title"],
+            data["description"],
+            data["priority"],
+            due_date_obj,
+            status=data["status"],
+            task_id=data["id"]
+        )
+
     def __str__(self):
         return f"[{self.id}] {self.title} ({self.priority}) - Due: {self.due_date} - {self.status}"
-    
+
 
 # ------------------------------
-# Task Manager (Core Features)
+# Task Manager (Core + File I/O)
 # ------------------------------
 class TaskManager:
+    FILE_NAME = "tasks.json"
+
     def __init__(self):
         self.tasks = []
+        self.load_tasks()
 
     def add_task(self, title, description, priority, due_date):
         try:
             due_date_obj = datetime.datetime.strptime(due_date, "%Y-%m-%d").date()
             task = Task(title, description, priority, due_date_obj)
             self.tasks.append(task)
+            self.save_tasks()
             print("✅ Task added successfully!\n")
         except ValueError:
             print("⚠ Invalid date format! Use YYYY-MM-DD.\n")
@@ -50,6 +84,7 @@ class TaskManager:
         for task in self.tasks:
             if task.id == task_id:
                 task.mark_complete()
+                self.save_tasks()
                 print("✅ Task marked as completed!\n")
                 return
         print("⚠ Task not found!\n")
@@ -58,9 +93,27 @@ class TaskManager:
         for task in self.tasks:
             if task.id == task_id:
                 self.tasks.remove(task)
+                self.save_tasks()
                 print("🗑 Task deleted successfully!\n")
                 return
         print("⚠ Task not found!\n")
+
+    def save_tasks(self):
+        """Save all tasks to JSON file."""
+        with open(self.FILE_NAME, "w") as f:
+            json.dump([task.to_dict() for task in self.tasks], f, indent=4)
+
+    def load_tasks(self):
+        """Load tasks from JSON file if exists."""
+        if os.path.exists(self.FILE_NAME):
+            with open(self.FILE_NAME, "r") as f:
+                try:
+                    tasks_data = json.load(f)
+                    self.tasks = [Task.from_dict(data) for data in tasks_data]
+                    if self.tasks:
+                        Task.task_counter = max(task.id for task in self.tasks) + 1
+                except json.JSONDecodeError:
+                    self.tasks = []
 
 
 # ------------------------------
